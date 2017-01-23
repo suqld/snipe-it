@@ -14,6 +14,11 @@ class CheckForSetup
     public function handle($request, Closure $next, $guard = null)
     {
 
+        // This is dumb
+        if ($request->is('_debugbar*')) {
+            return $next($request);
+        }
+
         if (Setting::setupCompleted()) {
 
             if ($request->is('setup*')) {
@@ -23,7 +28,7 @@ class CheckForSetup
             }
 
         } else {
-            if (!$request->is('setup*')) {
+            if (!($request->is('setup*')) && !($request->is('.env'))) {
                 return redirect(config('app.url').'/setup')->with('Request', $request);
             }
 

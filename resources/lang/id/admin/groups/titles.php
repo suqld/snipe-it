@@ -1,13 +1,14 @@
 <?php
 
 return array(
-
-    'group_management' 	 	=> 'Group Management',
-    'create_group' 	 		=> 'Create New Group',
-    'edit_group' 	 		=> 'Edit Group',
-    'group_name' 	 		=> 'Group Name',
-    'group_admin' 	 		=> 'Group Admin',
-    'allow' 	 			=> 'Allow',
-    'deny' 	 				=> 'Deny',
+    'about_groups_title'            => 'About Groups',
+    'about_groups'                  => 'Groups are used to generalize user permissions.',
+    'group_management' 	 	=> 'Manajemen Kelompok',
+    'create' 	 	 	    => 'Create New Group',
+    'update' 	 		        => 'Edit Group',
+    'group_name' 	 		=> 'Nama Kelompok',
+    'group_admin' 	 		=> 'Admin Kelompok',
+    'allow' 	 			=> 'Izin',
+    'deny' 	 				=> 'Tolak',
 
 );

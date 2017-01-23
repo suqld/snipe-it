@@ -4,6 +4,7 @@ namespace App\Providers;
 use Validator;
 use Illuminate\Support\ServiceProvider;
 use DB;
+use Log;
 
 
 /**
@@ -64,6 +65,11 @@ class AppServiceProvider extends ServiceProvider
             }
 
         });
+
+        // Share common variables with all views.
+        view()->composer('*', function ($view) {
+            $view->with('snipeSettings', \App\Models\Setting::getSettings());
+        });
     }
 
     /**
@@ -73,6 +79,20 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register()
     {
-        //
+        $monolog = Log::getMonolog();
+
+        if (config('app.debug')) {
+            $log_level = 'debug';
+        } else {
+            if (config('log-level')) {
+                $log_level = config('log-level');
+            } else {
+                $log_level = 'error';
+            }
+        }
+
+        foreach($monolog->getHandlers() as $handler) {
+            $handler->setLevel($log_level);
+        }
     }
 }

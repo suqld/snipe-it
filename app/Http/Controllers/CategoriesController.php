@@ -1,13 +1,14 @@
 <?php
 namespace App\Http\Controllers;
 
-use Illuminate\Http\Request;
 use App\Helpers\Helper;
 use App\Models\Category as Category;
 use App\Models\Company;
 use App\Models\Setting;
 use Auth;
 use DB;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Gate;
 use Input;
 use Lang;
 use Redirect;
@@ -52,7 +53,7 @@ class CategoriesController extends Controller
     {
         // Show the page
          $category_types= Helper::categoryTypeList();
-        return View::make('categories/edit')->with('category', new Category)
+        return View::make('categories/edit')->with('item', new Category)
         ->with('category_types', $category_types);
     }
 
@@ -108,7 +109,7 @@ class CategoriesController extends Controller
     public function getEdit($categoryId = null)
     {
         // Check if the category exists
-        if (is_null($category = Category::find($categoryId))) {
+        if (is_null($item = Category::find($categoryId))) {
             // Redirect to the blogs management page
             return redirect()->to('admin/settings/categories')->with('error', trans('admin/categories/message.does_not_exist'));
         }
@@ -119,7 +120,7 @@ class CategoriesController extends Controller
         $category_options = array('' => 'Top Level') + DB::table('categories')->where('id', '!=', $categoryId)->lists('name', 'id');
         $category_types= Helper::categoryTypeList();
 
-        return View::make('categories/edit', compact('category'))
+        return View::make('categories/edit', compact('item'))
         ->with('category_options', $category_options)
         ->with('category_types', $category_types);
     }
@@ -292,7 +293,6 @@ class CategoriesController extends Controller
                 'category_type' => ucwords($category->category_type),
                 'count'         => $category->itemCount(),
                 'acceptance'    => ($category->require_acceptance=='1') ? '<i class="fa fa-check"></i>' : '',
-                //EULA is still not working correctly
                 'eula'          => ($category->getEula()) ? '<i class="fa fa-check"></i>' : '',
                 'actions'       => $actions
             );
@@ -306,9 +306,9 @@ class CategoriesController extends Controller
     public function getDataViewAssets($categoryID)
     {
 
-        $category = Category::with('assets.company')->find($categoryID);
+        $category = Category::find($categoryID);
+        $category = $category->load('assets.company', 'assets.model', 'assets.assetstatus', 'assets.assigneduser');
         $category_assets = $category->assets();
-
         if (Input::has('search')) {
             $category_assets = $category_assets->TextSearch(e(Input::get('search')));
         }
@@ -332,7 +332,6 @@ class CategoriesController extends Controller
         $count = $category_assets->count();
         $category_assets = $category_assets->skip($offset)->take($limit)->get();
         $rows = array();
-
         foreach ($category_assets as $asset) {
 
             $actions = '';
@@ -344,26 +343,26 @@ class CategoriesController extends Controller
                 $actions = '<a href="'.route('restore/hardware', $asset->id).'" class="btn btn-warning btn-sm"><i class="fa fa-recycle icon-white"></i></a>';
             }
 
-            if ($asset->assetstatus) {
-                if ($asset->assetstatus->deployable != 0) {
-                    if (($asset->assigned_to !='') && ($asset->assigned_to > 0)) {
-                        $inout = '<a href="'.route('checkin/hardware', $asset->id).'" class="btn btn-primary btn-sm">'.trans('general.checkin').'</a>';
-                    } else {
-                        $inout = '<a href="'.route('checkout/hardware', $asset->id).'" class="btn btn-info btn-sm">'.trans('general.checkout').'</a>';
-                    }
+            if ($asset->availableForCheckout()) {
+                if (Gate::allows('assets.checkout')) {
+                    $inout = '<a href="'.route('checkout/hardware', $asset->id).'" class="btn btn-info btn-sm">'.trans('general.checkout').'</a>';
+                }
+            } else {
+                if (Gate::allows('assets.checkin')) {
+                    $inout = '<a href="'.route('checkin/hardware', $asset->id).'" class="btn btn-primary btn-sm">'.trans('general.checkin').'</a>';
                 }
             }
 
             $rows[] = array(
                 'id' => $asset->id,
                 'name' => (string)link_to('/hardware/'.$asset->id.'/view', $asset->showAssetName()),
-                'model' => $asset->model->name,
+                'model' => ($asset->model) ? (string)link_to('hardware/models/'.$asset->model->id.'/view', $asset->model->name) : '',
                 'asset_tag' => $asset->asset_tag,
                 'serial' => $asset->serial,
                 'assigned_to' => ($asset->assigneduser) ? (string)link_to('/admin/users/'.$asset->assigneduser->id.'/view', $asset->assigneduser->fullName()): '',
                 'change' => $inout,
                 'actions' => $actions,
-                'companyName' => Company::getName($asset),
+                'companyName'   => is_null($asset->company) ? '' : e($asset->company->name)
             );
         }
 

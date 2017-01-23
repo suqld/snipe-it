@@ -81,11 +81,18 @@ class Ldap extends Model
         if ($settings->is_ad =='1')
         {
 
-            // In case they haven't added an AD domain
-            if ($settings->ad_domain == '') {
-                $userDn      = $username.'@'.$settings->email_domain;
+            // Check if they are using the userprincipalname for the username field.
+            // If they are, we can skip building the UPN to authenticate against AD
+            if ($ldap_username_field=='userprincipalname')
+            {
+                $userDn = $username;
             } else {
-               $userDn      = $username.'@'.$settings->ad_domain;
+                // In case they haven't added an AD domain
+                if ($settings->ad_domain == '') {
+                    $userDn      = $username.'@'.$settings->email_domain;
+                } else {
+                    $userDn      = $username.'@'.$settings->ad_domain;
+                }
             }
 
         } else {
@@ -212,10 +219,10 @@ class Ldap extends Model
             $user->notes = 'Imported on first login from LDAP';
 
             if ($user->save()) {
-                return true;
+                return $user;
             } else {
                 LOG::debug('Could not create user.'.$user->getErrors());
-                exit;
+                throw new Exception("Could not create user: ".$user->getErrors());
             }
         }
 
@@ -247,8 +254,12 @@ class Ldap extends Model
 
         // Perform the search
         do {
+
             // Paginate (non-critical, if not supported by server)
-            ldap_control_paged_result($ldapconn, $page_size, false, $cookie);
+            if (!$ldap_paging = @ldap_control_paged_result($ldapconn, $page_size, false, $cookie)) {
+                throw new Exception('Problem with your LDAP connection. Try checking the Use TLS setting in Admin > Settings. ');
+            }
+
 
             $search_results = ldap_search($ldapconn, $base_dn, '('.$filter.')');
 
@@ -266,7 +277,7 @@ class Ldap extends Model
             $global_count += $results['count'];
             $result_set = array_merge($result_set, $results);
 
-            ldap_control_paged_result_response($ldapconn, $search_results, $cookie);
+            @ldap_control_paged_result_response($ldapconn, $search_results, $cookie);
 
         } while ($cookie !== null && $cookie != '');
 

@@ -59,7 +59,7 @@ class ConsumablesController extends Controller
         $manufacturer_list = Helper::manufacturerList();
 
         return View::make('consumables/edit')
-            ->with('consumable', new Consumable)
+            ->with('item', new Consumable)
             ->with('category_list', $category_list)
             ->with('company_list', $company_list)
             ->with('location_list', $location_list)
@@ -85,7 +85,7 @@ class ConsumablesController extends Controller
         $consumable->order_number           = e(Input::get('order_number'));
         $consumable->min_amt                = e(Input::get('min_amt'));
         $consumable->manufacturer_id         = e(Input::get('manufacturer_id'));
-        $consumable->model_no               = e(Input::get('model_no'));
+        $consumable->model_number               = e(Input::get('model_number'));
         $consumable->item_no         = e(Input::get('item_no'));
 
         if (e(Input::get('purchase_date')) == '') {
@@ -97,7 +97,7 @@ class ConsumablesController extends Controller
         if (e(Input::get('purchase_cost')) == '0.00') {
             $consumable->purchase_cost       =  null;
         } else {
-            $consumable->purchase_cost       = e(Input::get('purchase_cost'));
+            $consumable->purchase_cost       = Helper::ParseFloat(e(Input::get('purchase_cost')));
         }
 
         $consumable->qty                    = e(Input::get('qty'));
@@ -105,6 +105,7 @@ class ConsumablesController extends Controller
 
         // Was the consumable created?
         if ($consumable->save()) {
+            $consumable->logCreate();
             // Redirect to the new consumable  page
             return redirect()->to("admin/consumables")->with('success', trans('admin/consumables/message.create.success'));
         }
@@ -126,10 +127,10 @@ class ConsumablesController extends Controller
     public function getEdit($consumableId = null)
     {
         // Check if the consumable exists
-        if (is_null($consumable = Consumable::find($consumableId))) {
+        if (is_null($item = Consumable::find($consumableId))) {
             // Redirect to the blogs management page
             return redirect()->to('admin/consumables')->with('error', trans('admin/consumables/message.does_not_exist'));
-        } elseif (!Company::isCurrentUserHasAccess($consumable)) {
+        } elseif (!Company::isCurrentUserHasAccess($item)) {
             return redirect()->to('admin/consumables')->with('error', trans('general.insufficient_permissions'));
         }
 
@@ -138,7 +139,7 @@ class ConsumablesController extends Controller
         $location_list = Helper::locationsList();
         $manufacturer_list = Helper::manufacturerList();
 
-        return View::make('consumables/edit', compact('consumable'))
+        return View::make('consumables/edit', compact('item'))
             ->with('category_list', $category_list)
             ->with('company_list', $company_list)
             ->with('location_list', $location_list)
@@ -170,7 +171,7 @@ class ConsumablesController extends Controller
         $consumable->order_number           = e(Input::get('order_number'));
         $consumable->min_amt                   = e(Input::get('min_amt'));
         $consumable->manufacturer_id         = e(Input::get('manufacturer_id'));
-        $consumable->model_no               = e(Input::get('model_no'));
+        $consumable->model_number               = e(Input::get('model_number'));
         $consumable->item_no         = e(Input::get('item_no'));
 
         if (e(Input::get('purchase_date')) == '') {
@@ -182,10 +183,10 @@ class ConsumablesController extends Controller
         if (e(Input::get('purchase_cost')) == '0.00') {
             $consumable->purchase_cost       =  null;
         } else {
-            $consumable->purchase_cost       = e(Input::get('purchase_cost'));
+            $consumable->purchase_cost       = Helper::ParseFloat(e(Input::get('purchase_cost')));
         }
 
-        $consumable->qty                    = e(Input::get('qty'));
+        $consumable->qty                    = Helper::ParseFloat(e(Input::get('qty')));
 
         if ($consumable->save()) {
             return redirect()->to("admin/consumables")->with('success', trans('admin/consumables/message.update.success'));
@@ -316,14 +317,7 @@ class ConsumablesController extends Controller
         'user_id' => $admin_user->id,
         'assigned_to' => e(Input::get('assigned_to'))));
 
-        $logaction = new Actionlog();
-        $logaction->consumable_id = $consumable->id;
-        $logaction->checkedout_to = $consumable->assigned_to;
-        $logaction->asset_type = 'consumable';
-        $logaction->asset_id = 0;
-        $logaction->location_id = $user->location_id;
-        $logaction->user_id = Auth::user()->id;
-        $logaction->note = e(Input::get('note'));
+        $logaction = $consumable->logCheckout(e(Input::get('note')));
 
         $settings = Setting::getSettings();
 
@@ -343,7 +337,7 @@ class ConsumablesController extends Controller
                         'fields' => [
                             [
                                 'title' => 'Checked Out:',
-                                'value' => strtoupper($logaction->asset_type).' <'.config('app.url').'/admin/consumables/'.$consumable->id.'/view'.'|'.$consumable->name.'> checked out to <'.config('app.url').'/admin/users/'.$user->id.'/view|'.$user->fullName().'> by <'.config('app.url').'/admin/users/'.$admin_user->id.'/view'.'|'.$admin_user->fullName().'>.'
+                                'value' => 'Consumable <'.config('app.url').'/admin/consumables/'.$consumable->id.'/view'.'|'.$consumable->name.'> checked out to <'.config('app.url').'/admin/users/'.$user->id.'/view|'.$user->fullName().'> by <'.config('app.url').'/admin/users/'.$admin_user->id.'/view'.'|'.$admin_user->fullName().'>.'
                             ],
                             [
                                 'title' => 'Note:',
@@ -356,9 +350,6 @@ class ConsumablesController extends Controller
 
             }
         }
-
-
-        $log = $logaction->logaction('checkout');
 
         $consumable_user = DB::table('consumables_users')->where('assigned_to', '=', $consumable->assigned_to)->where('consumable_id', '=', $consumable->id)->first();
 
@@ -375,7 +366,8 @@ class ConsumablesController extends Controller
 
             Mail::send('emails.accept-asset', $data, function ($m) use ($user) {
                 $m->to($user->email, $user->first_name . ' ' . $user->last_name);
-                $m->subject('Confirm consumable delivery');
+                $m->replyTo(config('mail.reply_to.address'), config('mail.reply_to.name'));
+                $m->subject(trans('mail.Confirm_consumable_delivery'));
             });
         }
 
@@ -398,8 +390,11 @@ class ConsumablesController extends Controller
     */
     public function getDatatable()
     {
-        $consumables = Company::scopeCompanyables(Consumable::select('consumables.*')->whereNull('consumables.deleted_at')
-            ->with('company', 'location', 'category', 'users'));
+        $consumables = Company::scopeCompanyables(
+            Consumable::select('consumables.*')
+            ->whereNull('consumables.deleted_at')
+            ->with('company', 'location', 'category', 'users', 'manufacturer')
+        );
 
         if (Input::has('search')) {
             $consumables = $consumables->TextSearch(e(Input::get('search')));
@@ -417,7 +412,7 @@ class ConsumablesController extends Controller
             $limit = 50;
         }
 
-        $allowed_columns = ['id','name','order_number','min_amt','purchase_date','purchase_cost','companyName','category','model_no', 'item_no', 'manufacturer'];
+        $allowed_columns = ['id','name','order_number','min_amt','purchase_date','purchase_cost','companyName','category','model_number', 'item_no', 'manufacturer'];
         $order = Input::get('order') === 'asc' ? 'asc' : 'desc';
         $sort = in_array(Input::get('sort'), $allowed_columns) ? Input::get('sort') : 'created_at';
 
@@ -470,13 +465,13 @@ class ConsumablesController extends Controller
                 'location'   => ($consumable->location) ? e($consumable->location->name) : '',
                 'min_amt'           => e($consumable->min_amt),
                 'qty'           => e($consumable->qty),
-                'manufacturer'           => ($consumable->manufacturer) ? e($consumable->manufacturer->name) : '',
-                'model_no'           => e($consumable->model_no),
-                'item_no'           => e($consumable->item_no),
-                'category'           => ($consumable->category) ? e($consumable->category->name) : 'Missing category',
+                'manufacturer'  => ($consumable->manufacturer) ? (string) link_to('/admin/settings/manufacturers/'.$consumable->manufacturer_id.'/view', $consumable->manufacturer->name): '',
+                'model_number'      => e($consumable->model_number),
+                'item_no'       => e($consumable->item_no),
+                'category'      => ($consumable->category) ? (string) link_to('/admin/settings/categories/'.$consumable->category_id.'/view', $consumable->category->name) : 'Missing category',
                 'order_number'  => e($consumable->order_number),
                 'purchase_date'  => e($consumable->purchase_date),
-                'purchase_cost'  => ($consumable->purchase_cost!='') ? number_format($consumable->purchase_cost, 2): '' ,
+                'purchase_cost'  => Helper::formatCurrencyOutput($consumable->purchase_cost),
                 'numRemaining'  => $consumable->numRemaining(),
                 'actions'       => $actions,
                 'companyName'   => is_null($company) ? '' : e($company->name),

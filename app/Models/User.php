@@ -9,6 +9,7 @@ use Illuminate\Contracts\Auth\CanResetPassword as CanResetPasswordContract;
 use Watson\Validating\ValidatingTrait;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use App\Http\Traits\UniqueUndeletedTrait;
+use App\Models\Setting;
 
 class User extends Model implements AuthenticatableContract, CanResetPasswordContract
 {
@@ -67,7 +68,7 @@ class User extends Model implements AuthenticatableContract, CanResetPasswordCon
 
         // Loop through the groups to see if any of them grant this permission
         foreach ($user_groups as $user_group) {
-            $group_permissions = json_decode($user_group->permissions, true);
+            $group_permissions = (array) json_decode($user_group->permissions, true);
             if (((array_key_exists($section, $group_permissions)) && ($group_permissions[$section]=='1'))) {
                 return true;
             }
@@ -84,7 +85,7 @@ class User extends Model implements AuthenticatableContract, CanResetPasswordCon
 
         foreach ($this->groups as $user_group) {
             $group_permissions = json_decode($user_group->permissions, true);
-            $group_array = $group_permissions;
+            $group_array = (array)$group_permissions;
             if ((array_key_exists('superuser', $group_array)) && ($group_permissions['superuser']=='1')) {
                 return true;
             }
@@ -146,10 +147,8 @@ class User extends Model implements AuthenticatableContract, CanResetPasswordCon
             return config('app.url').'/uploads/avatars/'.$this->avatar;
         }
 
-        if ($this->email) {
-            // Generate the Gravatar hash
+        if ((Setting::getSettings()->load_remote=='1') && ($this->email!='')) {
             $gravatar = md5(strtolower(trim($this->email)));
-            // Return the Gravatar url
             return "//gravatar.com/avatar/".$gravatar;
         }
 
@@ -202,7 +201,7 @@ class User extends Model implements AuthenticatableContract, CanResetPasswordCon
      */
     public function userlog()
     {
-        return $this->hasMany('\App\Models\Actionlog', 'checkedout_to')->orderBy('created_at', 'DESC')->withTrashed();
+        return $this->hasMany('\App\Models\Actionlog', 'target_id')->orderBy('created_at', 'DESC')->withTrashed();
     }
 
     /**
@@ -255,11 +254,19 @@ class User extends Model implements AuthenticatableContract, CanResetPasswordCon
      */
     public function uploads()
     {
-        return $this->hasMany('\App\Models\Actionlog', 'asset_id')
-            ->where('asset_type', '=', 'user')
+        return $this->hasMany('\App\Models\Actionlog', 'item_id')
+            ->where('item_type', User::class)
             ->where('action_type', '=', 'uploaded')
             ->whereNotNull('filename')
             ->orderBy('created_at', 'desc');
+    }
+
+    /**
+     * Fetch Items User has requested
+     */
+    public function checkoutRequests()
+    {
+        return $this->belongsToMany(Asset::class, 'checkout_requests');
     }
 
     public function throttle()
@@ -302,6 +309,10 @@ class User extends Model implements AuthenticatableContract, CanResetPasswordCon
             ->orWhere('username', '=', $user_email);
     }
 
+    public static function generateEmailFromFullName($name) {
+        $username = User::generateFormattedNameFromFullName(Setting::getSettings()->email_format, $name);
+        return $username['username'].'@'.Setting::getSettings()->email_domain;
+    }
 
     public static function generateFormattedNameFromFullName($format = 'filastname', $users_name)
     {
@@ -333,8 +344,9 @@ class User extends Model implements AuthenticatableContract, CanResetPasswordCon
             } elseif ($format=='firstname') {
                 $email_last_name.=str_replace(' ', '', $last_name);
                 $email_prefix = $first_name;
-
             }
+
+
         }
 
         $user_username = $email_prefix;
@@ -370,10 +382,16 @@ class User extends Model implements AuthenticatableContract, CanResetPasswordCon
                 ->orWhere('users.email', 'LIKE', "%$search%")
                 ->orWhere('users.username', 'LIKE', "%$search%")
                 ->orWhere('users.notes', 'LIKE', "%$search%")
+                ->orWhere('users.jobtitle', 'LIKE', "%$search%")
                 ->orWhere('users.employee_num', 'LIKE', "%$search%")
                 ->orWhere(function ($query) use ($search) {
                     $query->whereHas('userloc', function ($query) use ($search) {
                         $query->where('locations.name', 'LIKE', '%'.$search.'%');
+                    });
+                })
+                ->orWhere(function ($query) use ($search) {
+                    $query->whereHas('groups', function ($query) use ($search) {
+                        $query->where('groups.name', 'LIKE', '%'.$search.'%');
                     });
                 })
 

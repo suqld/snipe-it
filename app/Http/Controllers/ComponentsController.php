@@ -61,7 +61,7 @@ class ComponentsController extends Controller
         $location_list = Helper::locationsList();
 
         return View::make('components/edit')
-            ->with('component', new Component)
+            ->with('item', new Component)
             ->with('category_list', $category_list)
             ->with('company_list', $company_list)
             ->with('location_list', $location_list);
@@ -89,6 +89,7 @@ class ComponentsController extends Controller
         $component->company_id             = Company::getIdForCurrentUser(Input::get('company_id'));
         $component->order_number           = e(Input::get('order_number'));
         $component->min_amt                = e(Input::get('min_amt'));
+        $component->serial                 = e(Input::get('serial'));
 
         if (e(Input::get('purchase_date')) == '') {
             $component->purchase_date       =  null;
@@ -99,14 +100,15 @@ class ComponentsController extends Controller
         if (e(Input::get('purchase_cost')) == '0.00') {
             $component->purchase_cost       =  null;
         } else {
-            $component->purchase_cost       = e(Input::get('purchase_cost'));
+            $component->purchase_cost       = Helper::ParseFloat(e(Input::get('purchase_cost')));
         }
 
-        $component->total_qty                    = e(Input::get('total_qty'));
+        $component->qty                    = e(Input::get('qty'));
         $component->user_id                = Auth::user()->id;
 
         // Was the component created?
         if ($component->save()) {
+            $component->logCreate();
             // Redirect to the new component  page
             return redirect()->to("admin/components")->with('success', trans('admin/components/message.create.success'));
         }
@@ -128,10 +130,10 @@ class ComponentsController extends Controller
     public function getEdit($componentId = null)
     {
         // Check if the component exists
-        if (is_null($component = Component::find($componentId))) {
+        if (is_null($item = Component::find($componentId))) {
             // Redirect to the blogs management page
             return redirect()->to('admin/components')->with('error', trans('admin/components/message.does_not_exist'));
-        } elseif (!Company::isCurrentUserHasAccess($component)) {
+        } elseif (!Company::isCurrentUserHasAccess($item)) {
             return redirect()->to('admin/components')->with('error', trans('general.insufficient_permissions'));
         }
 
@@ -139,7 +141,7 @@ class ComponentsController extends Controller
         $company_list = Helper::companyList();
         $location_list = Helper::locationsList();
 
-        return View::make('components/edit', compact('component'))
+        return View::make('components/edit', compact('item'))
             ->with('category_list', $category_list)
             ->with('company_list', $company_list)
             ->with('location_list', $location_list);
@@ -172,7 +174,8 @@ class ComponentsController extends Controller
         $component->location_id            = e(Input::get('location_id'));
         $component->company_id             = Company::getIdForCurrentUser(Input::get('company_id'));
         $component->order_number           = e(Input::get('order_number'));
-        $component->min_amt             = e(Input::get('min_amt'));
+        $component->min_amt                = e(Input::get('min_amt'));
+        $component->serial                 = e(Input::get('serial'));
 
         if (e(Input::get('purchase_date')) == '') {
             $component->purchase_date       =  null;
@@ -183,10 +186,10 @@ class ComponentsController extends Controller
         if (e(Input::get('purchase_cost')) == '0.00') {
             $component->purchase_cost       =  null;
         } else {
-            $component->purchase_cost       = e(Input::get('purchase_cost'));
+            $component->purchase_cost       = Helper::ParseFloat(e(Input::get('purchase_cost')));
         }
 
-        $component->total_qty                    = e(Input::get('total_qty'));
+        $component->qty                    = e(Input::get('qty'));
 
         // Was the component created?
         if ($component->save()) {
@@ -345,17 +348,11 @@ class ComponentsController extends Controller
         $component->assets()->attach($component->id, array(
         'component_id' => $component->id,
         'user_id' => $admin_user->id,
-        'created_at' => date('Y-m-d h:i:s'),
+        'created_at' => date('Y-m-d H:i:s'),
         'assigned_qty' => e(Input::get('assigned_qty')),
         'asset_id' => $asset_id));
 
-        $logaction = new Actionlog();
-        $logaction->component_id = $component->id;
-        $logaction->asset_id = $asset_id;
-        $logaction->asset_type = 'component';
-        $logaction->location_id = $asset->location_id;
-        $logaction->user_id = Auth::user()->id;
-        $logaction->note = e(Input::get('note'));
+        $logaction = $component->logCheckout(e(Input::get('note')), $asset_id);
 
         $settings = Setting::getSettings();
 
@@ -375,7 +372,7 @@ class ComponentsController extends Controller
                         'fields' => [
                             [
                                 'title' => 'Checked Out:',
-                                'value' => strtoupper($logaction->asset_type).' <'.config('app.url').'/admin/components/'.$component->id.'/view'.'|'.$component->name.'> checked out to <'.config('app.url').'/hardware/'.$asset->id.'/view|'.$asset->name.'> by <'.config('app.url').'/admin/users/'.$admin_user->id.'/view'.'|'.$admin_user->fullName().'>.'
+                                'value' => class_basename(strtoupper($logaction->item_type)).' <'.config('app.url').'/admin/components/'.$component->id.'/view'.'|'.$component->name.'> checked out to <'.config('app.url').'/hardware/'.$asset->id.'/view|'.$asset->showAssetName().'> by <'.config('app.url').'/admin/users/'.$admin_user->id.'/view'.'|'.$admin_user->fullName().'>.'
                             ],
                             [
                                 'title' => 'Note:',
@@ -388,9 +385,6 @@ class ComponentsController extends Controller
 
             }
         }
-
-
-        $log = $logaction->logaction('checkout');
 
       // Redirect to the new component page
         return redirect()->to("admin/components")->with('success', trans('admin/components/message.checkout.success'));
@@ -430,7 +424,7 @@ class ComponentsController extends Controller
             $limit = 50;
         }
 
-        $allowed_columns = ['id','name','min_amt','order_number','purchase_date','purchase_cost','companyName','category','total_qty'];
+        $allowed_columns = ['id','name','min_amt','order_number','serial','purchase_date','purchase_cost','companyName','category','total_qty'];
         $order = Input::get('order') === 'asc' ? 'asc' : 'desc';
         $sort = in_array(Input::get('sort'), $allowed_columns) ? Input::get('sort') : 'created_at';
 
@@ -478,13 +472,14 @@ class ComponentsController extends Controller
                 'checkbox'      =>'<div class="text-center"><input type="checkbox" name="component['.$component->id.']" class="one_required"></div>',
                 'id'            => $component->id,
                 'name'          => (string)link_to('admin/components/'.$component->id.'/view', e($component->name)),
+                'serial_number'          => $component->serial,
                 'location'   => ($component->location) ? e($component->location->name) : '',
-                'total_qty'           => e($component->total_qty),
+                'qty'           => e($component->qty),
                 'min_amt'           => e($component->min_amt),
                 'category'           => ($component->category) ? e($component->category->name) : 'Missing category',
                 'order_number'  => e($component->order_number),
                 'purchase_date'  => e($component->purchase_date),
-                'purchase_cost'  => ($component->purchase_cost!='') ? number_format($component->purchase_cost, 2): '' ,
+                'purchase_cost'  => Helper::formatCurrencyOutput($component->purchase_cost),
                 'numRemaining'  => $component->numRemaining(),
                 'actions'       => $actions,
                 'companyName'   => is_null($company) ? '' : e($company->name),

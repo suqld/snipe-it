@@ -16,7 +16,7 @@
 
 @section('header_right')
     @can('users.create')
-        @if (\App\Models\Setting::getSettings()->ldap_enabled == 1)
+        @if ($snipeSettings->ldap_enabled == 1)
           <a href="{{ route('ldap/user') }}" class="btn btn-default pull-right"><span class="fa fa-upload"></span> LDAP</a>
         @endif
           <a href="{{ route('import/user') }}" class="btn btn-default pull-right" style="margin-right: 5px;"><span class="fa fa-upload"></span> {{ trans('general.import') }}</a>
@@ -28,6 +28,9 @@
         @else
           <a class="btn btn-default pull-right" href="{{ URL::to('admin/users?status=deleted') }}" style="margin-right: 5px;">{{ trans('admin/users/table.show_deleted') }}</a>
         @endif
+    @can('users.view')
+        <a class="btn btn-default pull-right" href="{{ URL::to('admin/users/export') }}" style="margin-right: 5px;">Export</a>
+    @endcan
 
 @stop
 
@@ -61,7 +64,7 @@
              <table
               name="users"
               data-toolbar="#toolbar"
-              class="table table-striped"
+              class="table table-striped snipe-table"
               id="table"
               data-toggle="table"
               data-url="{{ route('api.users.list', array(''=>e(Input::get('status')))) }}"
@@ -79,8 +82,9 @@
                          <th data-switchable="true" data-sortable="false" data-field="companyName" data-visible="false">{{ trans('admin/companies/table.title') }}</th>
                          <th data-switchable="true" data-sortable="true" data-field="employee_num" data-visible="false">{{ trans('admin/users/table.employee_num') }}</th>
                          <th data-sortable="true" data-field="name">{{ trans('admin/users/table.name') }}</th>
+                         <th data-switchable="true" data-sortable="true" data-field="jobtitle" data-visible="false">{{ trans('admin/users/table.title') }}</th>
                          <th data-sortable="true" data-field="email">
-                             <span class="hidden-md hidden-lg">Email</span>
+                             <span class="hidden-md hidden-lg">{{ trans('admin/users/table.email') }}</span>
                              <span class="hidden-xs"><i class="fa fa-envelope fa-lg"></i></span>
                          </th>
                          <th data-sortable="true" data-field="username">{{ trans('admin/users/table.username') }}</th>
@@ -104,6 +108,9 @@
                          </th>
                          <th data-sortable="false" data-field="groups">{{ trans('general.groups') }}</th>
                          <th data-sortable="true" data-field="notes">{{ trans('general.notes') }}</th>
+                         <th data-sortable="true" data-field="two_factor_enrolled" data-visible="false">{{ trans('admin/users/general.two_factor_enrolled') }}</th>
+                         <th data-sortable="true" data-field="two_factor_optin" data-visible="false">{{ trans('admin/users/general.two_factor_active') }}</th>
+
                          <th data-sortable="true" data-field="activated">{{ trans('general.activated') }}</th>
                          <th data-sortable="true" data-field="created_at" data-searchable="true" data-visible="false">{{ trans('general.created_at') }}</th>
                          <th data-switchable="false" data-searchable="false" data-sortable="false" data-field="actions" >{{ trans('table.actions') }}</th>
@@ -127,53 +134,11 @@
 
   </div>
 </div>
-
+@stop
 
 
 @section('moar_scripts')
-<script src="{{ asset('assets/js/bootstrap-table.js') }}"></script>
-<script src="{{ asset('assets/js/extensions/cookie/bootstrap-table-cookie.js') }}"></script>
-<script src="{{ asset('assets/js/extensions/mobile/bootstrap-table-mobile.js') }}"></script>
-<script src="{{ asset('assets/js/extensions/export/bootstrap-table-export.js') }}"></script>
-<script src="{{ asset('assets/js/extensions/export/tableExport.js') }}"></script>
-<script src="{{ asset('assets/js/extensions/export/jquery.base64.js') }}"></script>
-<script type="text/javascript">
-    $('#table').bootstrapTable({
-        classes: 'table table-responsive table-no-bordered',
-        undefinedText: '',
-        iconsPrefix: 'fa',
-        showRefresh: true,
-        search: true,
-        pageSize: {{ \App\Models\Setting::getSettings()->per_page }},
-        pagination: true,
-        sidePagination: 'server',
-        sortable: true,
-        cookie: true,
-        cookieExpire: '2y',
-        mobileResponsive: true,
-        showExport: true,
-        showColumns: true,
-        exportDataType: 'all',
-        exportTypes: ['csv', 'txt','json', 'xml'],
-        exportOptions: {
-            fileName: 'users-export-' + (new Date()).toISOString().slice(0,10),
-        },
-        maintainSelected: true,
-        paginationFirstText: "{{ trans('general.first') }}",
-        paginationLastText: "{{ trans('general.last') }}",
-        paginationPreText: "{{ trans('general.previous') }}",
-        paginationNextText: "{{ trans('general.next') }}",
-        pageList: ['10','25','50','100','150','200'],
-        icons: {
-            paginationSwitchDown: 'fa-caret-square-o-down',
-            paginationSwitchUp: 'fa-caret-square-o-up',
-            columns: 'fa-columns',
-            refresh: 'fa-refresh'
-        },
-
-    });
-</script>
-
+@include ('partials.bootstrap-table', ['exportFile' => 'users-export', 'search' => true])
 
 <script>
 
@@ -202,6 +167,4 @@
 
 
 </script>
-@stop
-
 @stop

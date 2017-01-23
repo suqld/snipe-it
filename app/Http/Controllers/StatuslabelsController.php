@@ -87,11 +87,11 @@ class StatuslabelsController extends Controller
     public function getCreate()
     {
         // Show the page
-        $statuslabel = new Statuslabel;
-        $use_statuslabel_type = $statuslabel->getStatuslabelType();
+        $item = new Statuslabel;
+        $use_statuslabel_type = $item->getStatuslabelType();
         $statuslabel_types = Helper::statusTypeList();
 
-        return View::make('statuslabels/edit', compact('statuslabel_types', 'statuslabel'))->with('use_statuslabel_type', $use_statuslabel_type);
+        return View::make('statuslabels/edit', compact('statuslabel_types', 'item'))->with('use_statuslabel_type', $use_statuslabel_type);
     }
 
 
@@ -120,6 +120,7 @@ class StatuslabelsController extends Controller
         $statuslabel->pending          =  $statustype['pending'];
         $statuslabel->archived          =  $statustype['archived'];
         $statuslabel->color          =  e(Input::get('color'));
+        $statuslabel->show_in_nav          =  e(Input::get('show_in_nav'),0);
 
 
         // Was the asset created?
@@ -168,16 +169,16 @@ class StatuslabelsController extends Controller
     public function getEdit($statuslabelId = null)
     {
         // Check if the Statuslabel exists
-        if (is_null($statuslabel = Statuslabel::find($statuslabelId))) {
+        if (is_null($item = Statuslabel::find($statuslabelId))) {
             // Redirect to the blogs management page
             return redirect()->to('admin/settings/statuslabels')->with('error', trans('admin/statuslabels/message.does_not_exist'));
         }
 
-        $use_statuslabel_type = $statuslabel->getStatuslabelType();
+        $use_statuslabel_type = $item->getStatuslabelType();
 
         $statuslabel_types = array('' => trans('admin/hardware/form.select_statustype')) + array('undeployable' => trans('admin/hardware/general.undeployable')) + array('pending' => trans('admin/hardware/general.pending')) + array('archived' => trans('admin/hardware/general.archived')) + array('deployable' => trans('admin/hardware/general.deployable'));
 
-        return View::make('statuslabels/edit', compact('statuslabel', 'statuslabel_types'))->with('use_statuslabel_type', $use_statuslabel_type);
+        return View::make('statuslabels/edit', compact('item', 'statuslabel_types'))->with('use_statuslabel_type', $use_statuslabel_type);
     }
 
 
@@ -208,6 +209,7 @@ class StatuslabelsController extends Controller
         $statuslabel->pending          =  $statustype['pending'];
         $statuslabel->archived          =  $statustype['archived'];
         $statuslabel->color          =  e(Input::get('color'));
+        $statuslabel->show_in_nav          =  e(Input::get('show_in_nav'),0);
 
 
         // Was the asset created?
@@ -258,7 +260,7 @@ class StatuslabelsController extends Controller
 
     public function getDatatable()
     {
-        $statuslabels = Statuslabel::select(array('id','name','deployable','pending','archived','color'))
+        $statuslabels = Statuslabel::select(array('id','name','deployable','pending','archived','color','show_in_nav'))
         ->whereNull('deleted_at');
 
         if (Input::has('search')) {
@@ -314,6 +316,7 @@ class StatuslabelsController extends Controller
                 'type'          => e($label_type),
                 'name'          => e($statuslabel->name),
                 'color'          => $color,
+                'show_in_nav' => ($statuslabel->show_in_nav=='1') ? trans('general.yes') : trans('general.no'),
                 'actions'       => $actions
             );
         }

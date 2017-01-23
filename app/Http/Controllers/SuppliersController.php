@@ -45,7 +45,7 @@ class SuppliersController extends Controller
      */
     public function getCreate()
     {
-        return View::make('suppliers/edit')->with('supplier', new Supplier);
+        return View::make('suppliers/edit')->with('item', new Supplier);
     }
 
 
@@ -125,13 +125,13 @@ class SuppliersController extends Controller
     public function getEdit($supplierId = null)
     {
         // Check if the supplier exists
-        if (is_null($supplier = Supplier::find($supplierId))) {
+        if (is_null($item = Supplier::find($supplierId))) {
             // Redirect to the supplier  page
             return redirect()->to('admin/settings/suppliers')->with('error', trans('admin/suppliers/message.does_not_exist'));
         }
 
         // Show the page
-        return View::make('suppliers/edit', compact('supplier'));
+        return View::make('suppliers/edit', compact('item'));
     }
 
 
@@ -242,7 +242,7 @@ class SuppliersController extends Controller
 
     public function getDatatable()
     {
-        $suppliers = Supplier::select(array('id','name','address','address2','city','state','country','fax', 'phone','email','contact'))
+        $suppliers = Supplier::with('assets', 'licenses')->select(array('id','name','address','address2','city','state','country','fax', 'phone','email','contact'))
         ->whereNull('deleted_at');
 
         if (Input::has('search')) {
@@ -283,8 +283,8 @@ class SuppliersController extends Controller
                 'phone'             => e($supplier->phone),
                 'fax'             => e($supplier->fax),
                 'email'             => ($supplier->email!='') ? '<a href="mailto:'.e($supplier->email).'">'.e($supplier->email).'</a>' : '',
-                'assets'            => $supplier->num_assets(),
-                'licenses'          => $supplier->num_licenses(),
+                'assets'            => $supplier->assets->count(),
+                'licenses'          => $supplier->licenses->count(),
                 'actions'           => $actions
             );
         }

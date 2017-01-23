@@ -27,6 +27,7 @@ return [
     */
 
     'debug' => env('APP_DEBUG', false),
+    'warn_debug' => env('WARN_DEBUG', true),
 
     /*
     |--------------------------------------------------------------------------
@@ -109,6 +110,7 @@ return [
     */
 
     'log' => env('APP_LOG', 'single'),
+    'log-level' => env('APP_LOG_LEVEL', 'error'),
 
 
     /*
@@ -129,6 +131,20 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | ALLOW I-FRAMING
+    |--------------------------------------------------------------------------
+    |
+    | Normal users will never need to edit this. This option lets you run
+    | Snipe-IT within an I-Frame, which is normally disabled by default for
+    | security reasons, to prevent clickjacking. It should normally be set to false.
+    |
+    */
+
+    'allow_iframing' => env('ALLOW_IFRAMING', false),
+
+
+    /*
+    |--------------------------------------------------------------------------
     | Demo Mode Lockdown
     |--------------------------------------------------------------------------
     |
@@ -138,7 +154,6 @@ return [
     */
 
     'lock_passwords' => env('APP_LOCKED', false),
-
 
 
     /*
@@ -197,7 +212,9 @@ return [
         Collective\Html\HtmlServiceProvider::class,
         Spatie\Backup\BackupServiceProvider::class,
         Fideloper\Proxy\TrustedProxyServiceProvider::class,
-
+        MisterPhilip\MaintenanceMode\MaintenanceModeServiceProvider::class,
+        MisterPhilip\MaintenanceMode\MaintenanceCommandServiceProvider::class,
+        PragmaRX\Google2FA\Vendor\Laravel\ServiceProvider::class,
         /*
          * Custom service provider
          */
@@ -254,6 +271,7 @@ return [
         'View'      => Illuminate\Support\Facades\View::class,
         'Form'      => 'Collective\Html\FormFacade',
         'Html'      => 'Collective\Html\HtmlFacade',
+        'Google2FA' => PragmaRX\Google2FA\Vendor\Laravel\Facade::class,
     ],
 
 ];

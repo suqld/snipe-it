@@ -1,11 +1,12 @@
 <?php
 
 return array(
-
-    'asset_manufacturers'	=> 'Asset Manufacturers',
-    'create'				=> 'Create Manufacturer',
+    'about_manufacturers_title'     => 'About manufacturers',
+    'about_manufacturers_text'           => 'Manufacturers make all the magic items we consume.',
+    'asset_manufacturers'	=> 'Merek Aset',
+    'create'				=> 'Masukan Merek',
     'id'   					=> 'ID',
-    'name'      			=> 'Manufacturer Name',
-    'update'				=> 'Update Manufacturer',
+    'name'      			=> 'Nama Merek',
+    'update'				=> 'Perbarui Merek',
 
 );

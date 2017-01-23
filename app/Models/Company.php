@@ -1,17 +1,18 @@
 <?php
 namespace App\Models;
 
-use Illuminate\Database\Eloquent\Model;
-use Watson\Validating\ValidatingTrait;
+use App\Models\SnipeModel;
 use Auth;
 use DB;
+use Illuminate\Database\Eloquent\Model;
+use Watson\Validating\ValidatingTrait;
 
 /**
  * Model for Companies.
  *
  * @version    v1.8
  */
-final class Company extends Model
+final class Company extends SnipeModel
 {
     protected $table = 'companies';
 
@@ -136,7 +137,8 @@ final class Company extends Model
 
     public static function scopeCompanyables($query, $column = 'company_id')
     {
-        if (!static::isFullMultipleCompanySupportEnabled() || (Auth::check() && Auth::user()->isSuperUser())) {
+        // If not logged in and hitting this, assume we are on the command line and don't scope?'
+        if (!static::isFullMultipleCompanySupportEnabled() || (Auth::check() && Auth::user()->isSuperUser()) || (!Auth::check())) {
             return $query;
         } else {
             return static::scopeCompanyablesDirectly($query, $column);
@@ -175,5 +177,28 @@ final class Company extends Model
         } else {
             return e($company->name);
         }
+    }
+
+    public function users() {
+        return $this->hasMany(User::class);
+    }
+
+    public function assets() {
+        return $this->hasMany(Asset::class);
+    }
+
+    public function licenses() {
+        return $this->hasMany(License::class);
+    }
+    public function accessories() {
+        return $this->hasMany(Accessory::class);
+    }
+
+    public function consumables() {
+        return $this->hasMany(Consumable::class);
+    }
+
+    public function components() {
+        return $this->hasMany(Component::class);
     }
 }
